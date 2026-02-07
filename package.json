@@ -1,0 +1,10 @@
+{
+	"name": "leap.forward.sprite.renderer",
+	"version": "0.0.1",
+	"displayName": "Sprite Renderer (Leap Forward)",
+	"description": "Sprite renderer for Built-in Unity render pipeline.",
+	"unity": "2022.3",
+	"dependencies": {
+                "com.unity.editorcoroutines": "1.0.0"
+	}
+}
