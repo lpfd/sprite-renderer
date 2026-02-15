@@ -20,9 +20,9 @@ public class RenderCameraToImage : MonoBehaviour
     [Header("Shadow")]
     public bool renderShadowMap = true;
 
-    public LayerMask shadowReceiverMask = -1;
+    public float nearClipPlaneOverride = 0.01f;
 
-    public Light[] lights;
+    public LayerMask shadowReceiverMask = -1;
 
     public void RenderToImage()
     {
@@ -40,6 +40,7 @@ public class RenderCameraToImage : MonoBehaviour
                 CameraClearFlags originalFlags = cam.clearFlags;
                 RenderTexture originalRT = cam.targetTexture;
                 int originalCullingMask = cam.cullingMask;
+                var originalNearClipPlane = cam.nearClipPlane;
 
                 // Setup for transparency
                 cam.targetTexture = rt;
@@ -54,16 +55,19 @@ public class RenderCameraToImage : MonoBehaviour
                 if (renderNormalMap)
                     RenderNormalMap(cam, rt);
 
-                cam.cullingMask = shadowReceiverMask;
-
                 if (renderNormalMap)
+                {
+                    cam.cullingMask = shadowReceiverMask;
+                    cam.nearClipPlane = nearClipPlaneOverride;
                     RenderShadowMap(cam, rt);
+                }
 
                 // Restore camera state
                 cam.targetTexture = originalRT;
                 cam.backgroundColor = originalBackground;
                 cam.clearFlags = originalFlags;
                 cam.cullingMask = originalCullingMask;
+                cam.nearClipPlane = originalNearClipPlane;
 
                 AssetDatabase.Refresh();
             }
@@ -80,22 +84,25 @@ public class RenderCameraToImage : MonoBehaviour
 
     private void RenderShadowMap(Camera cam, RenderTexture rt)
     {
-        RenderWithShader(cam, Shader.Find("LeapForward/SpriteRenderer/ShadowReceiver"), rt);
-        //// 1. Setup the Plane
-        //GameObject plane = GameObject.CreatePrimitive(PrimitiveType.Plane);
-        //plane.transform.position = Vector3.zero;
-        //plane.transform.localScale = new Vector3(10, 1, 10); // Adjust size as needed
+        Light[] allLights = Object.FindObjectsByType<Light>(FindObjectsSortMode.None);
+        var areEnabled = new bool[allLights.Length];
+        for (int i = 0; i < allLights.Length; i++)
+        {
+            areEnabled[i] = allLights[i].enabled;
+            allLights[i].enabled = false;
+        }
+        for (int i = 0; i < allLights.Length; i++)
+        {
+            //if (!areEnabled[i])
+            //    continue;
+            allLights[i].enabled = true;
+            RenderWithShader(cam, Shader.Find("LeapForward/SpriteRenderer/ShadowReceiver"), rt, "_" + allLights[i].name);
+        }
+        for (int i = 0; i < allLights.Length; i++)
+        {
+            allLights[i].enabled = areEnabled[i];
+        }
 
-        //// 2. Apply Custom Shader
-        //Material shadowMat = new Material(Shader.Find("LeapForward/SpriteRenderer/ShadowReceiver"));
-        //plane.GetComponent<Renderer>().material = shadowMat;
-
-        //cam.Render();
-
-        //SaveRT(rt, $"{outputFolder}/{cam.name}_shadow.png");
-
-        //DestroyImmediate(plane);
-        //DestroyImmediate(shadowMat);
     }
 
     private void RenderAlbedo(Camera cam, RenderTexture rt)
@@ -108,13 +115,13 @@ public class RenderCameraToImage : MonoBehaviour
         RenderWithShader(cam, Shader.Find("LeapForward/SpriteRenderer/Normal"), rt);
     }
 
-    private void RenderWithShader(Camera cam, Shader shader, RenderTexture rt)
+    private void RenderWithShader(Camera cam, Shader shader, RenderTexture rt, string suffix = null)
     {
         string shaderName = shader != null ? shader.name.Replace("/", "_") : "Default";
 
         cam.RenderWithShader(shader, "RenderType");
 
-        SaveRT(rt, $"{outputFolder}/{cam.name}_{shaderName}.png");
+        SaveRT(rt, $"{outputFolder}/{cam.name}_{shaderName}{suffix ?? ""}.png");
     }
 
     private void SaveRT(RenderTexture rt, string fileName)
