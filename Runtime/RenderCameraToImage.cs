@@ -134,12 +134,87 @@ public class RenderCameraToImage : MonoBehaviour
         // but for a simple shadow map, the depth buffer is enough.
         cam.Render();
 
-        SaveRT(shadowMap, $"{outputFolder}/{cam.name}_Depth.exr");
+        var exrFileName = $"{outputFolder}/{cam.name}_Depth.exr";
+        SaveRT(shadowMap, exrFileName);
+
+        AssetDatabase.Refresh();
+
+        TextureImporter importer = AssetImporter.GetAtPath(exrFileName) as TextureImporter;
+        if (importer != null)
+        {
+            if (!importer.isReadable)
+            {
+                importer.isReadable = true;
+                importer.SaveAndReimport();
+            }
+        }
+
+        ConvertDepthToPng(exrFileName, $"{outputFolder}/{cam.name}_Depth.png");
+
+
 
         cam.targetTexture = null;
 
         // 5. Cleanup
         DestroyImmediate(shadowMap);
+    }
+
+    private void ConvertDepthToPng(string exrFileName, string pngFileName)
+    {
+        Texture2D sourceExr = AssetDatabase.LoadAssetAtPath<Texture2D>(exrFileName);
+        if (sourceExr == null)
+        {
+            Debug.LogError($"Could not find EXR at path: {exrFileName}. Ensure it starts with 'Assets/'");
+            return;
+        }
+
+        // 2. Check if the texture is readable
+        try
+        {
+            sourceExr.GetPixels();
+        }
+        catch (UnityException e)
+        {
+            Debug.LogError($"Texture is not readable! Go to the Inspector for '{exrFileName}' and check 'Read/Write Enabled'. \n{e.Message}");
+            return;
+        }
+
+        Color[] pixels = sourceExr.GetPixels();
+
+        // Extract R channel (Depth is usually stored here in EXRs)
+        float[] depthValues = pixels.Select(p => p.r).ToArray();
+
+        float min = depthValues.Where(_ => _ != 0).Min();
+        float max = depthValues.Where(_ => _ != 0).Max();
+        float range = max - min;
+
+        if (range <= 0.00001f)
+        {
+            Debug.LogWarning("Depth range is near zero. The image will be a solid color.");
+            range = 1f;
+        }
+
+        Debug.Log($"[Processing] Min: {min} | Max: {max} | Range: {range}");
+
+        // 4. Normalize and create new texture
+        // Formula: (pixel - min) / (max - min)
+        Texture2D outputTex = new Texture2D(sourceExr.width, sourceExr.height, TextureFormat.RGB24, false);
+        Color[] newPixels = new Color[pixels.Length];
+
+        for (int i = 0; i < pixels.Length; i++)
+        {
+            float normalized = Math.Clamp((depthValues[i] - min) / range, 0.0f, 1.0f);
+            newPixels[i] = new Color(normalized, normalized, normalized);
+        }
+
+        outputTex.SetPixels(newPixels);
+        outputTex.Apply();
+
+        // 5. Save PNG to disk
+        byte[] pngData = outputTex.EncodeToPNG();
+        File.WriteAllBytes(pngFileName, pngData);
+
+        DestroyImmediate(outputTex);
     }
 
     private void RenderPerLigthSource(Camera cam, RenderTexture rt, Action<Light> renderer)
