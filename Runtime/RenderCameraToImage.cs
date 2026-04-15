@@ -45,6 +45,7 @@ public class RenderCameraToImage : MonoBehaviour
         if (!Directory.Exists(outputFolder)) Directory.CreateDirectory(outputFolder);
 
         RenderTexture rt = new RenderTexture(outputWidth, outputHeight, 24, RenderTextureFormat.ARGB32);
+        RenderTexture rtLinear = new RenderTexture(outputWidth, outputHeight, 24, RenderTextureFormat.ARGB32, RenderTextureReadWrite.Linear);
 
         try
         {
@@ -72,13 +73,13 @@ public class RenderCameraToImage : MonoBehaviour
                     RenderAlbedo(cam, rt);
 
                 if (renderAO)
-                    RenderAO(cam, rt);
+                    RenderAO(cam, rtLinear);
 
                 if (renderAlpha)
-                    RenderAlpha(cam, rt);
+                    RenderAlpha(cam, rtLinear);
 
                 if (renderNormalMap)
-                    RenderNormalMap(cam, rt);
+                    RenderNormalMap(cam, rtLinear);
 
                 if (renderShaded)
                 {
